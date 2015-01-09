@@ -1,158 +1,298 @@
+
+def whyrun_supported?
+    true
+end
+
 def aws
-  {
-  :provider => 'AWS',
-  :aws_access_key_id => new_resource.aws_access_key_id,
-  :aws_secret_access_key => new_resource.aws_secret_access_key,
-  :aws_session_token => new_resource.aws_session_token
-  }
+    {
+    :provider => 'AWS',
+    :aws_access_key_id => new_resource.aws_access_key_id,
+    :aws_secret_access_key => new_resource.aws_secret_access_key,
+    :aws_session_token => new_resource.aws_session_token
+    }
 end
 
 def name
-  @name ||= begin
-    return new_resource.name + '.' if new_resource.name !~ /\.$/
-    new_resource.name
-  end
+    @name ||= begin
+        return new_resource.name + '.' if new_resource.name !~ /\.$/
+        new_resource.name
+    end
+end
+
+def zone_name
+    @zone_name ||= begin
+        return new_resource.zone + '.' if new_resource.zone !~ /\.$/
+        new_resource.zone
+    end
 end
 
 def value
-  @value ||= Array(new_resource.value)
+    @value ||= Array(new_resource.value)
 end
 
 def type
-  @type ||= new_resource.type
+    @type ||= new_resource.type
 end
 
 def ttl
-  @ttl ||= new_resource.ttl
+    @ttl ||= begin
+        ttl = new_resource.ttl.to_s
+    end
 end
 
-def overwrite
-  @overwrite ||= new_resource.overwrite
+def health_check
+    @health_check ||= new_resource.health_check
 end
 
-def alias_target
-  @alias_target ||= new_resource.alias_target
+def health_check_ip
+    @health_check_ip ||= new_resource.health_check_ip
+end
+
+def health_check_port
+    @health_check_port ||= new_resource.health_check_port
+end
+
+def health_check_type
+    @health_check_type ||= if ! new_resource.health_check_type.nil?
+        health_check_type = new_resource.health_check_type.upcase
+    end
+end
+
+def health_check_path
+    @health_check_path ||= new_resource.health_check_path
+end
+
+def health_check_search_string
+    @health_check_search_string ||= new_resource.health_check_search_string
+end
+
+def health_check_interval
+    @health_check_interval ||= new_resource.health_check_interval
+end
+
+def health_check_threshold
+    @health_check_threshold ||= new_resource.health_check_threshold
+end
+
+def set_id
+    @set_id ||= new_resource.set_id
+end
+
+def weight
+    @weight ||= if ! new_resource.weight.nil?
+        weight = new_resource.weight.to_s
+    end
 end
 
 def mock?
-  @mock ||= new_resource.mock
+    @mock ||= new_resource.mock
 end
 
-def mock_env(connection_info)
-  Fog.mock!
-  conn = Fog::DNS.new(connection_info)
-  zone_id = conn.create_hosted_zone(name).body['HostedZone']['Id']
-  conn.zones.get(zone_id)
+def mock_env
+    Fog.mock!
+    conn = Fog::DNS.new(aws)
+    zone_id = conn.create_hosted_zone(name).body['HostedZone']['Id']
+    conn.zones.get(zone_id)
 end
 
-def zone(connection_info)
-  @zone ||= begin
-    if mock?
-      @zone = mock_env(connection_info)
-    elsif new_resource.aws_access_key_id && new_resource.aws_secret_access_key
-      @zone = Fog::DNS.new(connection_info).zones.get( new_resource.zone_id )
-    else
-      Chef::Log.info "No AWS credentials supplied, going to attempt to use IAM roles instead"
-      @zone = Fog::DNS.new({ :provider => "AWS", :use_iam_profile => true }
-                             ).zones.get( new_resource.zone_id )
+def route53
+    @route53 ||= begin
+        if mock?
+            @route53 = mock_env
+        elsif new_resource.aws_access_key_id && new_resource.aws_secret_access_key
+            @route53 = Fog::DNS.new(aws)
+        else
+            Chef::Log.info "No AWS credentials supplied, going to attempt to use IAM roles instead"
+            @route53 = Fog::DNS.new({ :provider => "AWS", :use_iam_profile => true })
+        end
     end
-  end
 end
 
-def record_attributes
-  common_attributes = { :name => name, :type => type }
-  common_attributes.merge(record_value_or_alias_attributes)
+def zone_id
+    @zone_id ||= begin
+        if mock?
+            @zone_id = '1234'
+        else
+            @zone_id = route53.zones.all().find { |z| z.domain == zone_name }.id
+        end
+    end
 end
 
-def record
-  Chef::Log.info("Getting record: #{name} #{type}")
-  records = zone(aws).records
-  records.count.zero? ? nil : records.get(name, type)
+def health_check_list
+    health_check_list ||= begin
+        list = route53.list_health_checks.body
+        if list.has_key?("HealthChecks")
+            health_check_list = list["HealthChecks"]
+        end
+    end
 end
 
-def record_value_or_alias_attributes
-  if alias_target
-    { :alias_target => alias_target.to_hash }
-  else
-    { :value => value, :ttl => ttl }
-  end
+def zone
+    @zone ||= route53.zones.get(zone_id)
+end
+
+def load_current_resource
+    @current_resource ||= zone.records.get(name, type, set_id)
+end
+
+def current_health_check
+    current_health_check ||= health_check_list.find do |check|
+        check["HealthCheckConfig"]["IPAddress"] == health_check_ip
+        check["HealthCheckConfig"]["Port"] == health_check_port.to_s
+        check["HealthCheckConfig"]["Type"] == health_check_type
+        check["HealthCheckConfig"]["ResourcePath"] == health_check_path
+    end
+end
+
+def create_health_check
+    Chef::Log.debug "Creating healthcheck for #{health_check_type}://#{health_check_ip}:#{health_check_port}#{health_check_path}"
+    options = {:resource_path => health_check_path}
+
+    if ! health_check_interval.nil?
+        options["interval"] = health_check_interval
+    end
+
+    if ! health_check_threshold.nil?
+        options["threshold"] = health_check_threshold
+    end
+
+    if type == "HTTP_STR_MATCH" || type == "HTTPS_STR_MATCH"
+        options["search_string"] = health_check_search_string
+    end
+
+    begin
+        route53.create_health_check(health_check_ip, health_check_port, health_check_type, options)
+    rescue Excon::Errors::BadRequest => e
+        Chef::Log.error Nokogiri::XML( e.response.body ).xpath( "//xmlns:Message" ).text
+    end
+end
+
+def modify_record
+    options = {}
+
+    if current_resource.ttl != ttl
+        Chef::Log.debug "Changing TTL for #{name} to #{ttl}"
+        options["ttl"] = ttl
+    end
+    if current_resource.value != value
+        Chef::Log.debug "Changing value for #{name} to #{value}"
+        options["value"] = value
+    end
+    if current_resource.weight != weight
+        Chef::Log.debug "Changing weight for #{name} to #{weight}"
+        options["weight"] = weight
+    end
+
+    if health_check
+
+        if current_health_check.nil?
+
+            create_health_check
+            options["health_check_id"] = current_health_check["Id"]
+
+        elsif current_resource.health_check_id != current_health_check["Id"]
+
+            options["health_check_id"] = current_health_check["Id"]
+
+        end
+
+        if current_resource.set_identifier != set_id
+            Chef::Log.debug "Changing set_id for #{name} to #{set_id}"
+            options["set_identifier"] = set_id
+        end
+
+    else
+
+        if ! current_health_check.nil?
+            Chef::Log.debug "Removing healthcheck from #{name}"
+            options["health_check_id"] = nil
+        end
+
+        if ! current_resource.set_identifier.nil?
+            Chef::Log.debug "Removing set_id from #{name}"
+            options["set_identifier"] = nil
+        end
+
+    end
+                
+    if options.length == 0
+        Chef::Log.info "Record #{name} is up to date - nothing to do."
+    else
+
+        begin
+            current_resource.modify(options)
+        rescue Excon::Errors::BadRequest => e
+            Chef::Log.error Nokogiri::XML( e.response.body ).xpath( "//xmlns:Message" ).text
+        end
+
+    end
+end
+
+def create_record
+    require 'fog/aws/dns'
+    require 'nokogiri'
+
+    options = {}
+
+    if health_check
+
+        if current_health_check.nil?
+            create_health_check
+        end
+
+        options["health_check_id"] = current_health_check["Id"]
+        options["set_identifier"] = set_id
+
+    end
+
+    options["name"] = name
+    options["type"] = type
+    options["ttl"] = ttl
+    options["value"] = value
+    options["weight"] = weight
+
+    begin
+        zone.records.create(options)
+    rescue Excon::Errors::BadRequest => e
+        Chef::Log.error Nokogiri::XML( e.response.body ).xpath( "//xmlns:Message" ).text
+    end
+
 end
 
 action :create do
-  require 'fog'
-  require 'nokogiri'
+    require 'fog/aws/dns'
+    require 'nokogiri'
 
-  def create
-    begin
-      zone(aws).records.create(record_attributes)
-      Chef::Log.debug("Created record: #{record_attributes.inspect}")
-    rescue Excon::Errors::BadRequest => e
-      Chef::Log.error Nokogiri::XML( e.response.body ).xpath( "//xmlns:Message" ).text
-    end
-  end
-
-  def same_record?(record)
-    name.eql?(record.name) &&
-      same_value?(record) &&
-        ttl.eql?(record.ttl.to_i)
-  end
-
-  def same_value?(record)
-    if alias_target
-      same_alias_target?(record)
+    if health_check && ( weight.nil? || set_id.nil? )
+        Chef::Log.error "Error: health checks require weight and set_id."
+        Chef::Application.fatal!("Invalid health check definition for #{name}")
     else
-      value.sort == record.value.sort
+        if current_resource.nil?
+            converge_by("Creating record #{name}") do
+                create_record
+            end
+        else 
+            converge_by("Updating record #{name}") do
+                modify_record
+            end
+        end
     end
-  end
 
-  def same_alias_target?(record)
-    alias_target &&
-      record.alias_target &&
-      (alias_target['dns_name'] == record.alias_target['DNSName'].gsub(/\.$/,''))
-  end
-
-  if record.nil?
-    create
-    Chef::Log.info "Record created: #{name}"
-  elsif !same_record?(record)
-    unless overwrite == false
-      record.destroy
-      create
-      Chef::Log.info "Record modified: #{name}"
-   else
-      Chef::Log.info "Record #{name} should have been modified, but overwrite is set to false."
-      Chef::Log.debug "Current value: #{record.value.first}"
-      Chef::Log.debug "Desired value: #{value}"
-    end
-  else Chef::Log.info "There is nothing to update."
-  end
 end
 
 action :delete do
-  require 'fog'
-  require 'nokogiri'
+    require 'fog/aws/dns'
+    require 'nokogiri'
 
-  if mock?
-    # Make some fake data so that we can successfully delete when testing.
-    zone(aws).records.create(
-      name: name,
-      type: type,
-      value: ['1.2.3.4'],
-      ttyl: 300
-    )
-  end
-
-  def delete
-    zone(aws).records.get(name, type).destroy
-    Chef::Log.debug("Destroyed record: #{name} #{type}")
-  rescue Excon::Errors::BadRequest => e
-    Chef::Log.error Nokogiri::XML(e.response.body).xpath('//xmlns:Message').text
-  end
-
-  if record.nil?
-    Chef::Log.info 'There is nothing to delete.'
-  else
-    delete
-    Chef::Log.info "Record deleted: #{name}"
-  end
+    if !current_resource.nil?
+        converge_by("Deleting record #{name}") do
+            begin
+                current_resource.destroy
+            rescue Excon::Errors::BadRequest => e
+                Chef::Log.error Nokogiri::XML( e.response.body ).xpath( "//xmlns:Message" ).text
+            end
+        end
+    else
+        Chef::Log.debug 'There is nothing to delete'
+    end
 end

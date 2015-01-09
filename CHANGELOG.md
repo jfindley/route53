@@ -1,3 +1,6 @@
+## v0.4.0
+* Large rewrite to support zones and advanced records
+* Also adds support for whyrun mode
 ## v0.3.8
 * allow for nokogiri version to be specified
 ## v0.3.6
