@@ -7,5 +7,7 @@
 # All rights reserved - Do Not Redistribute
 #
 
-chef_gem "fog"
+chef_gem "fog" do
+    version "1.26.0"
+end
 chef_gem "nokogiri"

@@ -18,6 +18,6 @@ attribute :health_check_path,     :kind_of => String
 attribute :health_check_search_string,     :kind_of => String
 attribute :health_check_interval,          :kind_of => Fixnum
 attribute :health_check_threshold,         :kind_of => Fixnum
-attribute :set_id,            :kind_of => String
+attribute :set_id,                :kind_of => String
 attribute :weight,                :kind_of => Fixnum
 attribute :mock,                  kind_of: [TrueClass, FalseClass], default: false

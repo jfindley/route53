@@ -1,3 +1,7 @@
+## v0.4.1
+* Moved update detection to separate function
+* Disabled Excon SSL verification pending a good, portable solution
+* Various small bugfixes
 ## v0.4.0
 * Large rewrite to support zones and advanced records
 * Also adds support for whyrun mode

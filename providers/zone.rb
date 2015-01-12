@@ -31,6 +31,8 @@ def route53
     require 'fog/aws/dns'
     require 'nokogiri'
 
+    Excon.defaults[:ssl_verify_peer] = false
+
     @route53 ||= begin
         if mock?
             @route53 = mock_env

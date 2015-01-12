@@ -96,6 +96,11 @@ def mock_env
 end
 
 def route53
+    require 'fog/aws/dns'
+    require 'nokogiri'
+
+    Excon.defaults[:ssl_verify_peer] = false
+
     @route53 ||= begin
         if mock?
             @route53 = mock_env
@@ -167,7 +172,7 @@ def create_health_check
     end
 end
 
-def modify_record
+def has_changed
     options = {}
 
     if current_resource.ttl != ttl
@@ -214,17 +219,15 @@ def modify_record
         end
 
     end
-                
-    if options.length == 0
-        Chef::Log.info "Record #{name} is up to date - nothing to do."
-    else
 
-        begin
-            current_resource.modify(options)
-        rescue Excon::Errors::BadRequest => e
-            Chef::Log.error Nokogiri::XML( e.response.body ).xpath( "//xmlns:Message" ).text
-        end
+    return options
+end
 
+def modify_record(options)
+    begin
+        current_resource.modify(options)
+    rescue Excon::Errors::BadRequest => e
+        Chef::Log.error Nokogiri::XML( e.response.body ).xpath( "//xmlns:Message" ).text
     end
 end
 
@@ -268,12 +271,17 @@ action :create do
         Chef::Application.fatal!("Invalid health check definition for #{name}")
     else
         if current_resource.nil?
-            converge_by("Creating record #{name}") do
+            converge_by("create record #{name}") do
                 create_record
             end
-        else 
-            converge_by("Updating record #{name}") do
-                modify_record
+        else
+            options = has_changed
+            if options.length == 0
+                Chef::Log.info "Record #{name} is up to date - nothing to do."
+            else
+                converge_by("update record #{name}") do
+                    modify_record
+                end
             end
         end
     end
@@ -285,7 +293,7 @@ action :delete do
     require 'nokogiri'
 
     if !current_resource.nil?
-        converge_by("Deleting record #{name}") do
+        converge_by("delete record #{name}") do
             begin
                 current_resource.destroy
             rescue Excon::Errors::BadRequest => e
