@@ -275,12 +275,12 @@ action :create do
                 create_record
             end
         else
-            options = has_changed
-            if options.length == 0
+            diff = has_changed
+            if diff.length == 0
                 Chef::Log.info "Record #{name} is up to date - nothing to do."
             else
                 converge_by("update record #{name}") do
-                    modify_record
+                    modify_record(diff)
                 end
             end
         end
