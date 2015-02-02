@@ -142,9 +142,9 @@ end
 
 def current_health_check
     current_health_check ||= health_check_list.find do |check|
-        check["HealthCheckConfig"]["IPAddress"] == health_check_ip
-        check["HealthCheckConfig"]["Port"] == health_check_port.to_s
-        check["HealthCheckConfig"]["Type"] == health_check_type
+        check["HealthCheckConfig"]["IPAddress"] == health_check_ip &&
+        check["HealthCheckConfig"]["Port"] == health_check_port.to_s &&
+        check["HealthCheckConfig"]["Type"] == health_check_type &&
         check["HealthCheckConfig"]["ResourcePath"] == health_check_path
     end
 end
@@ -279,6 +279,7 @@ action :create do
             if diff.length == 0
                 Chef::Log.info "Record #{name} is up to date - nothing to do."
             else
+                Chef::Log.debug "Diff for #{name}: #{diff}"
                 converge_by("update record #{name}") do
                     modify_record(diff)
                 end

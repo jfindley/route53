@@ -1,3 +1,6 @@
+## v0.4.2
+* Fixed healthcheck matching
+* Improved debug output to print record diff
 ## v0.4.1
 * Moved update detection to separate function
 * Disabled Excon SSL verification pending a good, portable solution
