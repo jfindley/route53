@@ -17,26 +17,26 @@ chef_gem "fog"
 
 
 route53_zone "create_zone" do
-    name "heisenberg.com"
+    name "test.com"
     aws_access_key_id node[:route53][:aws_access_key_id]
     aws_secret_access_key node[:route53][:aws_secret_access_key]
 end
 
 route53_record "create_record" do
-    name "pinkman.heisenberg.com"
+    name "rec1.test.com"
     type "A"
-    value [ "1.2.3.4" ]
-    zone "heisenberg.com"
+    value [ "1.2.3.4", "7.8.9.1" ]
+    zone "test.com"
     ttl 60
     aws_access_key_id node[:route53][:aws_access_key_id]
     aws_secret_access_key node[:route53][:aws_secret_access_key]
 end
 
 route53_record "create_healthcheck_record" do
-    name "gus.heisenberg.com"
+    name "rec2.test.com"
     type "A"
     value "1.2.3.5"
-    zone "heisenberg.com"
+    zone "test.com"
     weight 50
     health_check true
     health_check_type "http"
@@ -51,10 +51,10 @@ route53_record "create_healthcheck_record" do
 end
 
 route53_record "create_second_healthcheck_record" do
-    name "gus.heisenberg.com"
+    name "rec2.test.com"
     type "A"
     value "1.2.3.8"
-    zone "heisenberg.com"
+    zone "test.com"
     weight 25
     health_check true
     health_check_type "http"

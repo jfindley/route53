@@ -17,12 +17,14 @@ describe command('echo -e "default:\n  aws_access_key_id: AKIAJEQIXBOUBLI6ULZQ\n
 end
 
 describe command(fog_command('r53.zones.all()')) do
-    its(:stdout) { should match /heisenberg.com./ }
+    its(:stdout) { should match /test.com./ }
     its(:exit_status) { should eq 0 }
 end
 
-describe command(fog_command('r53.zones.all().find {|z| z.domain == "heisenberg.com."}.records.all()')) do
-    its(:stdout) { should match /pinkman.heisenberg.com./ }
+describe command(fog_command('r53.zones.all().find {|z| z.domain == "test.com."}.records.all()')) do
+    its(:stdout) { should match /rec1.test.com./ }
+    its(:stdout) { should match /1.2.3.4/ }
+    its(:stdout) { should match /7.8.9.1/ }
     its(:exit_status) { should eq 0 }
 end
 
@@ -31,12 +33,12 @@ describe command(fog_command('r53.list_health_checks.body')) do
     its(:exit_status) { should eq 0 }
 end
 
-describe command(fog_command('r53.zones.all().find {|z| z.domain == "heisenberg.com."}.records.get("gus.heisenberg.com.", "A", "los_pollos_1")')) do
+describe command(fog_command('r53.zones.all().find {|z| z.domain == "test.com."}.records.get("rec2.test.com.", "A", "los_pollos_1")')) do
     its(:stdout) { should match /1.2.3.5/ }
     its(:exit_status) { should eq 0 }
 end
 
-describe command(fog_command('r53.zones.all().find {|z| z.domain == "heisenberg.com."}.records.get("gus.heisenberg.com.", "A", "los_pollos_2")')) do
+describe command(fog_command('r53.zones.all().find {|z| z.domain == "test.com."}.records.get("rec2.test.com.", "A", "los_pollos_2")')) do
     its(:stdout) { should match /1.2.3.8/ }
     its(:exit_status) { should eq 0 }
 end
@@ -49,22 +51,22 @@ describe command(fog_command('r53.delete_health_check(r53.list_health_checks.bod
     its(:exit_status) { should eq 0 }
 end
 
-describe command(fog_command('r53.zones.all().find {|z| z.domain == "heisenberg.com."}.records.get("pinkman.heisenberg.com.", "A").destroy')) do
+describe command(fog_command('r53.zones.all().find {|z| z.domain == "test.com."}.records.get("rec1.test.com.", "A").destroy')) do
     its(:stdout) { should match /true/ }
     its(:exit_status) { should eq 0 }
 end
 
-describe command(fog_command('r53.zones.all().find {|z| z.domain == "heisenberg.com."}.records.get("gus.heisenberg.com.", "A", "los_pollos_1").destroy')) do
+describe command(fog_command('r53.zones.all().find {|z| z.domain == "test.com."}.records.get("rec2.test.com.", "A", "los_pollos_1").destroy')) do
     its(:stdout) { should match /true/ }
     its(:exit_status) { should eq 0 }
 end
 
-describe command(fog_command('r53.zones.all().find {|z| z.domain == "heisenberg.com."}.records.get("gus.heisenberg.com.", "A", "los_pollos_2").destroy')) do
+describe command(fog_command('r53.zones.all().find {|z| z.domain == "test.com."}.records.get("rec2.test.com.", "A", "los_pollos_2").destroy')) do
     its(:stdout) { should match /true/ }
     its(:exit_status) { should eq 0 }
 end
 
-describe command(fog_command('r53.zones.all().find {|z| z.domain == "heisenberg.com."}.destroy')) do
+describe command(fog_command('r53.zones.all().find {|z| z.domain == "test.com."}.destroy')) do
     its(:stdout) { should match /true/ }
     its(:exit_status) { should eq 0 }
 end
